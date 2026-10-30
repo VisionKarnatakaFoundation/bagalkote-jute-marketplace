@@ -1,0 +1,14 @@
+const fs=require('node:fs'),vm=require('node:vm'),assert=require('node:assert/strict');
+const nodes=new Map();const el=id=>{if(!nodes.has(id))nodes.set(id,{value:'',textContent:'',innerHTML:'',hidden:true,src:'',classList:{add(){},remove(){}},addEventListener(){},querySelector(){return null}});return nodes.get(id)};
+const query={select(){return this},order(){return this},eq(){return this},single(){return this},maybeSingle(){return this},range(){return this},then(resolve){resolve({data:[],error:null})}};
+const context=vm.createContext({console,URL,Blob,setTimeout:()=>{},location:{origin:'https://example.test',pathname:'/'},document:{getElementById:el,addEventListener(){}},supabase:{createClient:()=>({auth:{getSession:async()=>({data:{session:null}}),onAuthStateChange(){}},from:()=>Object.create(query),storage:{from:()=>({getPublicUrl:()=>({data:{publicUrl:'https://example.test/photo.jpg'}})})}})},MARKET_CONFIG:{},seed:[],ASSETS:{},categories:['All Jute Products','Jute Bags'],alert(){},confirm:()=>true,scrollTo(){}});
+vm.runInContext(fs.readFileSync('app.js','utf8'),context);
+vm.runInContext("openAccount('register','seller')",context);assert.match(el('modalBody').innerHTML,/Register/);assert.match(el('modalBody').innerHTML,/minlength="10"/);
+vm.runInContext("openAccount('login','admin')",context);assert.doesNotMatch(el('modalBody').innerHTML,/Create account/);
+vm.runInContext("user={id:'buyer'}; profile={name:'Buyer',role:'customer'}; seller=null;",context);
+const o={id:'order1',buyer_id:'buyer',seller_id:'seller',title:'<img onerror=alert(1)>',quantity:2,unit_price:100,shipping:20,status:'awaiting_payment',expires_at:'2099-01-01',buyer_name:'Buyer',buyer_phone:'+919000000001',seller_phone:'+919000000002',address:'Test address',created_at:'2026-10-30',payment_instructions:'Pay seller'};
+context.fixture=o;let html=vm.runInContext("orderCard(fixture,'buy')",context);assert.match(html,/Submit payment reference/);assert.match(html,/₹220/);assert.match(html,/&lt;img/);assert.doesNotMatch(html,/Verify received payment/);
+o.expires_at='2000-01-01';html=vm.runInContext("orderCard(fixture,'buy')",context);assert.match(html,/Payment window expired/);assert.doesNotMatch(html,/Submit payment reference/);
+o.status='payment_submitted';vm.runInContext("user={id:'seller'};profile={role:'seller'};seller={status:'approved'}",context);html=vm.runInContext("orderCard(fixture,'sell')",context);assert.match(html,/Verify received payment/);assert.doesNotMatch(html,/Mark dispatched/);
+o.status='paid';html=vm.runInContext("orderCard(fixture,'sell')",context);assert.match(html,/Mark dispatched/);assert.doesNotMatch(html,/Cancel order/);
+console.log('PASS: registration roles, admin registration exclusion, escaped content, totals and status-specific order controls');
